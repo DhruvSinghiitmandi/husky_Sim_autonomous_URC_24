@@ -7,7 +7,7 @@ import cv2
 import tf
 from geometry_msgs.msg import PoseStamped
 import numpy as np
-from std_msgs.msg import String
+from std_msgs.msg import Bool
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 
@@ -20,11 +20,12 @@ mode = "P"
 class image_converter:
   
   def __init__(self):
-    self.image_pub = rospy.Publisher("between_image",Image,queue_size=10)
-    self.between_pub = rospy.Publisher("/move_base_simple/goal",PoseStamped,queue_size=1)
-    self.bridge = CvBridge()
+    self.image_pub        = rospy.Publisher("between_image",Image,queue_size=10)
+    self.AR               = rospy.Publisher("AR",Bool,queue_size=1)
+    self.between_pub      = rospy.Publisher("/move_base_simple/goal",PoseStamped,queue_size=1)
+    self.bridge           = CvBridge()
     self.calibrate_camera = rospy.Subscriber("/realsense/color/camera_info",CameraInfo,self.callbackCalibrate)
-    self.image_sub = rospy.Subscriber("/realsense/color/image_raw",Image,self.callback)
+    self.image_sub        = rospy.Subscriber("/realsense/color/image_raw",Image,self.callback)
     
 
   def callback(self,data):
@@ -80,6 +81,7 @@ class image_converter:
           rotation_matrix[:3, :3], _ = cv2.Rodrigues(rvec)
 
           quaternion = tf.transformations.quaternion_from_matrix(rotation_matrix)
+          
 
           if mode == "P":  
             self.publishPostPose(tvec[0][0][0],tvec[0][0][1],tvec[0][0][2],quaternion[0],quaternion[1],quaternion[2],quaternion[3])
@@ -126,7 +128,7 @@ class image_converter:
   def publishPostPose(self,pX, pY,pZ, oX,oY,oZ, oW):
     global postPose
     postPose = PoseStamped()
-    postPose.header.frame_id = "base_link"
+    postPose.header.frame_id = "camera_realsense_link"
     postPose.pose.position.x = pZ 
     postPose.pose.position.y = pX 
     postPose.pose.position.z = 0
@@ -136,22 +138,26 @@ class image_converter:
     postPose.pose.orientation.z = oZ
     postPose.pose.orientation.w = oW 
             
-    self.between_pub.publish(postPose)      
+    self.between_pub.publish(postPose)
+    self.AR.publish(True)     
+    # rospy.sleep(20) 
 
   def publishGatePose(self,corners, pX, pY,pZ, oX,oY,oZ, oW):
     if len(corners) > 1:
       global betweenPose
       betweenPose = PoseStamped()
-      betweenPose.header.frame_id = "between_point"
+      betweenPose.header.frame_id = "camera_realsense_link"
       betweenPose.pose.position.x = pZ / 2
       betweenPose.pose.position.y = pX / 2
-      betweenPose.pose.position.z = pY / 2
+      betweenPose.pose.position.z = 0
 
-      betweenPose.pose.orientation.x = oX / 2
-      betweenPose.pose.orientation.y = oY / 2
+      betweenPose.pose.orientation.x = 0
+      betweenPose.pose.orientation.y = 0
       betweenPose.pose.orientation.z = oZ / 2
       betweenPose.pose.orientation.w = oW / 2
       self.between_pub.publish(betweenPose)
+      self.AR.publish(True)
+      # rospy.sleep(20)
 
   def drawMarker(self, corners, ids, cv_image):
     if len(corners) > 0:
